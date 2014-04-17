@@ -424,43 +424,36 @@ static int xmp_create(const char* path, mode_t mode, struct fuse_file_info* fi) 
 
     (void) fi;
 
-    //int res;
     int action = 1; // this indicates encrypt 
     FILE* file = NULL;
-    char * modeString = "rb"; 
     
     //encrypt the file, since it's a new file 
-    //flag as encrypted 
+    
  
     //strmode(mode,modeString); 
 
     /* Open Files */
     file = fopen(newPath,"w");
-    if(!inFile){
-			fprintf(stderr, "failed to open infile\n");
+    if(!file){
+	fprintf(stderr, "failed to open infile\n");
 	return EXIT_FAILURE;
     }
     
 
 
     /* Perform do_crpt action (encrypt, decrypt, copy) */
-    if(!do_crypt(inFile, outFile, action,key_str)){
+    if(!do_crypt(file, file, action,key_str)){
 	fprintf(stderr, "do_crypt failure\n");
 	return -errno; 
     }
+
 
     /* Cleanup */
     if(fclose(file)){
 		return -errno;
     }
     
-
-
-
-    //res = creat(newPath, mode);
-    ///f(res == -1)
-	//return -errno;
-
+   //TODO: flag as encrypted 
 
     return 0;
 }
@@ -581,15 +574,21 @@ static struct fuse_operations xmp_oper = {
 int main(int argc, char *argv[])
 {
 	umask(0);
-
+	//phrase, mirror dir, mount point
 	//path information
-	printf("Mounting to: %s\n",argv[argc-2]);
-	printf("Mounting from: %s\n",argv[argc-1]);
+	printf("Mounting from: %s\n",argv[argc-2]);
+	printf("Mounting to: %s\n",argv[argc-1]);
+	printf("Mounting key: %s\n",argv[argc-3]);
+
+	//grab the key 
+	key_str = argv[argc-3]; 
 
 	//change the root directory to the one we are supplying. 
-	bb_data.rootdir = realpath(argv[argc-1], NULL); 
+	bb_data.rootdir = realpath(argv[argc-2], NULL); 
 	printf("New Root Dir: %s\n",bb_data.rootdir); 
 	//remove that path after we use it... 
-	argc--;
+	argv[argc-3] = argv[argc-1];
+	argc--; 
+	argc--; 
 	return fuse_main(argc, argv, &xmp_oper, NULL);
 }
