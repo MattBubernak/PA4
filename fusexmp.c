@@ -34,10 +34,14 @@
 #ifdef linux
 /* For pread()/pwrite() */
 #define _XOPEN_SOURCE 500
+/* Linux is missing ENOATTR error, using ENODATA instead */
+#define ENOATTR ENODATA
 #endif
 
 
-
+#include <sys/xattr.h>
+#include <linux/xattr.h>
+#include <sys/types.h>
 #include <string.h>
 #include <stdlib.h>
 #include <fuse.h>
@@ -65,6 +69,7 @@ struct bb_state {
 static struct bb_state bb_data = {NULL,NULL}; 
 
 char* key_str = "nudlyf"; //key used for encryption 
+char* flag = "user.pa4-encfs.encrypted";
 
 void fixPath(char newPath[PATH_MAX],const char * path)
 {
@@ -361,6 +366,67 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 
 	(void) fi;
 
+	//check encryption
+        char* tmpstr = NULL;
+        char* tmpval = NULL;
+        ssize_t valsize = 0;
+
+	/* Get attribute value size */
+	valsize = getxattr(newPath, "user.pa4-encfs.encrypted", NULL, 0);
+	if(valsize < 0){
+	    if(errno == ENOATTR){
+		fprintf(stdout, "No %s attribute set on %s\n", tmpstr, newPath);
+		free(tmpstr);
+		return EXIT_SUCCESS;
+	    }
+	    else{
+		perror("getxattr error");
+		fprintf(stderr, "path  = %s\n", newPath);
+		fprintf(stderr, "name  = %s\n", tmpstr);
+		fprintf(stderr, "value = %s\n", "NULL");
+		fprintf(stderr, "size  = %zd\n", valsize);
+		exit(EXIT_FAILURE);
+	    }
+	}
+	/* Malloc Value Space */
+	tmpval = malloc(sizeof(*tmpval)*(valsize+1));
+	if(!tmpval){
+	    perror("malloc of 'tmpval' error");
+	    exit(EXIT_FAILURE);
+	}
+	/* Get attribute value */
+	valsize = getxattr(newPath,  "user.pa4-encfs.encrypted", tmpval, valsize);
+	if(valsize < 0){
+	    if(errno == ENOATTR){
+		fprintf(stdout, "No %s attribute set on %s\n", tmpstr, newPath);
+		free(tmpval);
+		return EXIT_SUCCESS;
+	    }
+	    else{
+		perror("getxattr error");
+		fprintf(stderr, "path  = %s\n", newPath);
+		fprintf(stderr, "name  = %s\n", tmpstr);
+		fprintf(stderr, "value = %s\n", tmpval);
+		fprintf(stderr, "size  = %zd\n", valsize);
+		free(tmpval);
+		exit(EXIT_FAILURE);
+	    }
+	}
+	
+	/* Print Value */
+	tmpval[valsize] = '\0';
+	fprintf(stdout, "%s = %s\n", tmpstr, tmpval);
+
+
+	if (tmpval == "true")
+	{
+		//TODO decrypt file
+	}
+
+	free(tmpval);
+
+
+
 	//if encrypted, decrypt the file, if it's not encrypted don't decrypt 
 	fd = open(newPath, O_RDONLY);
 	if (fd == -1)
@@ -454,6 +520,18 @@ static int xmp_create(const char* path, mode_t mode, struct fuse_file_info* fi) 
     }
     
    //TODO: flag as encrypted 
+
+
+	if(setxattr(newPath, flag, "true", strlen("true"), 0)){
+	    perror("setxattr error");
+
+	    exit(EXIT_FAILURE);
+	}
+
+
+
+
+
 
     return 0;
 }
