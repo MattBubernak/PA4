@@ -500,7 +500,24 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	    if(errno == ENOATTR)
 	    {
 		fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
-		return EXIT_SUCCESS;
+		//instead of exiting do the read operation 
+
+
+
+		fd = open(newPath, O_RDONLY);
+				
+		if (fd == -1)
+			return -errno;
+
+		res = pread(fd, buf, size, offset);
+		if (res == -1)
+			res = -errno;
+
+		close(fd);
+		//remove the tmp file we created
+		remove(tmpPath); 
+		return res;
+		//return EXIT_SUCCESS;
 	    }
 	    else 
              {
@@ -520,7 +537,24 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	    if(errno == ENOATTR){
 		fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
 		free(tmpval);
-		return EXIT_SUCCESS;
+		//instead of exiting do the read operation 
+		fd = open(newPath, O_RDONLY);
+				
+		if (fd == -1)
+			return -errno;
+
+		res = pread(fd, buf, size, offset);
+		if (res == -1)
+			res = -errno;
+
+		close(fd);
+		//remove the tmp file we created
+		remove(tmpPath); 
+		return res;
+
+
+
+		//return EXIT_SUCCESS;
 	    }
 	    else{
 		perror("getxattr error");
