@@ -81,15 +81,129 @@ void fixPath(char newPath[PATH_MAX],const char * path)
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
 	
-	//create a new path 
-	char newPath[PATH_MAX]; 
-	fixPath(newPath,path); 
-	
-	int res;
+	fprintf(stderr,"Entered getattr\n");
 
-	res = lstat(newPath, stbuf);
-	if (res == -1)
-		return -errno;
+	//create a new path 
+	char newPath[PATH_MAX];
+	char tmpPath[PATH_MAX];  
+	fixPath(newPath,path); 
+	fixPath(tmpPath,"/tmpreadfile.txt"); 
+	fprintf(stderr,"created this path:%s\n",tmpPath);
+        fprintf(stderr,"real this path:%s\n",newPath);
+	
+
+	int fd;
+
+
+	int res;
+	int res2; //res for decrypted file if we use it. 
+
+	struct stat * stbuf2;
+	stbuf2 = (struct stat *) malloc(sizeof(struct stat));
+
+	fprintf(stderr,"abot to lstat it"); 
+	//grab the un-encrypted attributes. 
+		res = lstat(newPath, stbuf);
+		if (res == -1)
+			return -errno;
+
+	fprintf(stderr,"just lstated it"); 
+	if (S_ISREG(stbuf->st_mode))
+	{
+
+
+		//========== begin of encryption check =============
+		int encrypted=0; // indicates whether its encrypted or not 
+		int action = 0; // this indicates decrypt 
+		char* tmpval = NULL;
+		ssize_t valsize = 0;
+		FILE* file = NULL; 
+		FILE* tmpfile = NULL; 
+
+		/* Get attribute value size */
+		valsize = getxattr(newPath, "user.pa4-encfs.encrypted", NULL, 0);
+		if(valsize < 0){
+		    if(errno == ENOATTR)
+		    {
+			fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
+			return EXIT_SUCCESS;
+		    }
+		    else 
+		     {
+			perror("getxattr error,nudlyf");
+			exit(EXIT_FAILURE);
+		    }
+		}
+		/* Malloc Value Space */
+		tmpval = malloc(sizeof(*tmpval)*(valsize+1));
+		if(!tmpval){
+		    perror("malloc of 'tmpval' error");
+		    exit(EXIT_FAILURE);
+		}
+		/* Get attribute value */
+		valsize = getxattr(newPath,  "user.pa4-encfs.encrypted", tmpval, valsize);
+		if(valsize < 0){
+		    if(errno == ENOATTR){
+			fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
+			free(tmpval);
+			return EXIT_SUCCESS;
+		    }
+		    else{
+			perror("getxattr error,nudlyf2");
+			free(tmpval);
+			exit(EXIT_FAILURE);
+		    }
+		}
+	
+		/* Print Value */
+		tmpval[valsize] = '\0';
+		fprintf(stdout, "%s = %s\n", "user.pa4-encfs.encrypted", tmpval);
+
+		//once we have the flag actually check to see if this file is encrypted 
+		if (!strcmp(tmpval,"true"))
+		{
+			encrypted  =1; //mark that the file was encrypted 
+			fprintf(stderr,"flag indicated it's encrypted\n");
+			//decrypt it 
+			/* Open Files */
+			    file = fopen(newPath,"r");
+			    tmpfile = fopen(tmpPath,"w");
+			    if(!file){
+				fprintf(stderr, "failed to open infile\n");
+				return EXIT_FAILURE;
+			    }
+
+			    /* Perform do_crpt action (encrypt, decrypt, copy) */
+			    if(!do_crypt(file, tmpfile, action,key_str)){
+				fprintf(stderr, "do_crypt failure\n");
+				return -errno; 
+			    }
+
+			    /* Cleanup */
+			    if(fclose(file)){
+					return -errno;
+			    }
+			    if(fclose(tmpfile)){
+					return -errno;
+			    }
+		}
+
+		free(tmpval);
+		//========== end of encryption check =============
+		fprintf(stderr,"alive"); 
+		//if encrypted, decrypt the file, if it's not encrypted don't decrypt 
+		if (encrypted)
+		{
+			res2 = lstat(tmpPath, stbuf2);
+			if (res2 == -1)
+				return -errno;
+			stbuf->st_size = stbuf2->st_size;
+			stbuf->st_blocks = stbuf2->st_blocks; 
+			stbuf->st_blksize = stbuf2->st_blksize; 
+		}
+		remove(tmpPath); 
+		
+	}
 
 	return 0;
 }
@@ -356,35 +470,41 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		    struct fuse_file_info *fi)
 {
+        fprintf(stderr,"Entered read\n");
+	
 	//create a new path 
 	char newPath[PATH_MAX]; 
+	char tmpPath[PATH_MAX]; 
+	//fix both the paths
 	fixPath(newPath,path); 
-
+	fixPath(tmpPath,"/tmpreadfile.txt"); 
+	fprintf(stderr,"created this path:%s\n",tmpPath);
+        fprintf(stderr,"real this path:%s\n",newPath);
+	
 	int fd;
 	int res;
+	(void) fi; //void fi to avoid warning
+
+
+	//========== begin of encryption check =============
+	int encrypted=0; // indicates whether its encrypted or not 
 	int action = 0; // this indicates decrypt 
-
-	(void) fi;
-
-	//check encryption
-        char* tmpstr = NULL;
-        char* tmpval = NULL;
+	char* tmpval = NULL;
         ssize_t valsize = 0;
+	FILE* file = NULL; 
+	FILE* tmpfile = NULL; 
 
 	/* Get attribute value size */
 	valsize = getxattr(newPath, "user.pa4-encfs.encrypted", NULL, 0);
 	if(valsize < 0){
-	    if(errno == ENOATTR){
-		fprintf(stdout, "No %s attribute set on %s\n", tmpstr, newPath);
-		free(tmpstr);
+	    if(errno == ENOATTR)
+	    {
+		fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
 		return EXIT_SUCCESS;
 	    }
-	    else{
+	    else 
+             {
 		perror("getxattr error");
-		fprintf(stderr, "path  = %s\n", newPath);
-		fprintf(stderr, "name  = %s\n", tmpstr);
-		fprintf(stderr, "value = %s\n", "NULL");
-		fprintf(stderr, "size  = %zd\n", valsize);
 		exit(EXIT_FAILURE);
 	    }
 	}
@@ -398,16 +518,12 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	valsize = getxattr(newPath,  "user.pa4-encfs.encrypted", tmpval, valsize);
 	if(valsize < 0){
 	    if(errno == ENOATTR){
-		fprintf(stdout, "No %s attribute set on %s\n", tmpstr, newPath);
+		fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
 		free(tmpval);
 		return EXIT_SUCCESS;
 	    }
 	    else{
 		perror("getxattr error");
-		fprintf(stderr, "path  = %s\n", newPath);
-		fprintf(stderr, "name  = %s\n", tmpstr);
-		fprintf(stderr, "value = %s\n", tmpval);
-		fprintf(stderr, "size  = %zd\n", valsize);
 		free(tmpval);
 		exit(EXIT_FAILURE);
 	    }
@@ -415,20 +531,52 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	
 	/* Print Value */
 	tmpval[valsize] = '\0';
-	fprintf(stdout, "%s = %s\n", tmpstr, tmpval);
+	fprintf(stdout, "%s = %s\n", "user.pa4-encfs.encrypted", tmpval);
 
-
-	if (tmpval == "true")
+	//once we have the flag actually check to see if this file is encrypted 
+	if (!strcmp(tmpval,"true"))
 	{
-		//TODO decrypt file
+		encrypted  =1; //mark that the file was encrypted 
+        	fprintf(stderr,"flag indicated it's encrypted\n");
+		//decrypt it 
+		/* Open Files */
+		    file = fopen(newPath,"r");
+		    tmpfile = fopen(tmpPath,"w");
+		    if(!file){
+			fprintf(stderr, "failed to open infile\n");
+			return EXIT_FAILURE;
+		    }
+
+		    /* Perform do_crpt action (encrypt, decrypt, copy) */
+		    if(!do_crypt(file, tmpfile, action,key_str)){
+			fprintf(stderr, "do_crypt failure\n");
+			return -errno; 
+		    }
+
+		    /* Cleanup */
+		    if(fclose(file)){
+				return -errno;
+		    }
+	            if(fclose(tmpfile)){
+				return -errno;
+		    }
 	}
 
 	free(tmpval);
-
-
+	//========== end of encryption check =============
 
 	//if encrypted, decrypt the file, if it's not encrypted don't decrypt 
-	fd = open(newPath, O_RDONLY);
+	if (!encrypted)
+	{
+		fd = open(newPath, O_RDONLY);
+	}	
+	
+	else
+	{
+	//if it is encrypted, open the tmp file we created 
+		fprintf(stderr,"opening: %s",tmpPath);
+		fd = open(tmpPath, O_RDONLY);
+	}
 	if (fd == -1)
 		return -errno;
 
@@ -437,6 +585,9 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		res = -errno;
 
 	close(fd);
+	//remove the tmp file we created
+	remove(tmpPath); 
+	fprintf(stderr,"about to return fd!\n");
 	return res;
 }
 
@@ -444,25 +595,142 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 		     off_t offset, struct fuse_file_info *fi)
 {
 
+	 fprintf(stderr,"Entered write\n");
+	
 	//create a new path 
 	char newPath[PATH_MAX]; 
+	char tmpPath[PATH_MAX]; 
+	//fix both the paths
 	fixPath(newPath,path); 
+	fixPath(tmpPath,"/tmpwritefile.txt"); 
+	fprintf(stderr,"created this path:%s\n",tmpPath);
+        fprintf(stderr,"real this path:%s\n",newPath);
 
-	int fd;
-	int res;
-	int action = 1; // this indicates encrypt 
+	int fd; 
+	int res; 
 
-	(void) fi;
-	//encrypt the file, unless it's an un-encrypted file. check flag? 
-	fd = open(newPath, O_WRONLY);
+	//========== begin of encryption check =============
+	int encrypted=0; // indicates whether its encrypted or not 
+	int action = 0; // this indicates decrypt 
+	char* tmpval = NULL;
+        ssize_t valsize = 0;
+	FILE* file = NULL; 
+	FILE* tmpfile = NULL; 
+
+	/* Get attribute value size */
+	valsize = getxattr(newPath, "user.pa4-encfs.encrypted", NULL, 0);
+	if(valsize < 0){
+	    if(errno == ENOATTR)
+	    {
+		fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
+		return EXIT_SUCCESS;
+	    }
+	    else 
+             {
+		perror("getxattr error");
+		exit(EXIT_FAILURE);
+	    }
+	}
+	/* Malloc Value Space */
+	tmpval = malloc(sizeof(*tmpval)*(valsize+1));
+	if(!tmpval){
+	    perror("malloc of 'tmpval' error");
+	    exit(EXIT_FAILURE);
+	}
+	/* Get attribute value */
+	valsize = getxattr(newPath,  "user.pa4-encfs.encrypted", tmpval, valsize);
+	if(valsize < 0){
+	    if(errno == ENOATTR){
+		fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
+		free(tmpval);
+		return EXIT_SUCCESS;
+	    }
+	    else{
+		perror("getxattr error");
+		free(tmpval);
+		exit(EXIT_FAILURE);
+	    }
+	}
+	
+	/* Print Value */
+	tmpval[valsize] = '\0';
+	fprintf(stdout, "%s = %s\n", "user.pa4-encfs.encrypted", tmpval);
+
+	//once we have the flag actually check to see if this file is encrypted 
+	if (!strcmp(tmpval,"true"))
+	{
+		encrypted  =1; //mark that the file was encrypted 
+        	fprintf(stderr,"flag indicated it's encrypted\n");
+		//decrypt it 
+		/* Open Files */
+		    file = fopen(newPath,"r");
+		    tmpfile = fopen(tmpPath,"w");
+		    if(!file){
+			fprintf(stderr, "failed to open infile\n");
+			return EXIT_FAILURE;
+		    }
+
+		    /* Perform do_crpt action (encrypt, decrypt, copy) */
+		    if(!do_crypt(file, tmpfile, action,key_str)){
+			fprintf(stderr, "do_crypt failure\n");
+			return -errno; 
+		    }
+
+		    /* Cleanup */
+		    if(fclose(file)){
+				return -errno;
+		    }
+		    if(fclose(tmpfile)){
+				return -errno;
+		    }
+	}
+
+	free(tmpval);
+	//========== end of encryption check =============
+
+	//if encrypted, decrypt the file, if it's not encrypted don't decrypt 
+	if (!encrypted)
+	{
+		fd = open(newPath, O_WRONLY);
+	}	
+	
+	else
+	{
+	//if it is encrypted, open the tmp file we created 
+		fprintf(stderr,"opening: %s",tmpPath);
+		fd = open(tmpPath, O_WRONLY);
+	}
+
 	if (fd == -1)
 		return -errno;
-
+	//perform the write 
 	res = pwrite(fd, buf, size, offset);
 	if (res == -1)
 		res = -errno;
-
 	close(fd);
+
+	//open the two files back up
+	file = fopen(newPath,"w+");
+	tmpfile = fopen(tmpPath,"r+");
+
+	action = 1; //set back to encrypting. 
+	/* Perform do_crpt action (encrypt, decrypt, copy) */
+	    if(!do_crypt(tmpfile, file, action,key_str)){
+		fprintf(stderr, "do_crypt failure\n");
+		return -errno; 
+	    }
+
+	/* Cleanup */
+		    if(fclose(file)){
+				return -errno;
+		    }
+		    if(fclose(tmpfile)){
+				return -errno;
+		    }
+
+
+
+	remove(tmpPath); 
 	return res;
 }
 
@@ -484,6 +752,7 @@ static int xmp_statfs(const char *path, struct statvfs *stbuf)
 
 static int xmp_create(const char* path, mode_t mode, struct fuse_file_info* fi) {
 
+    fprintf(stderr,"created a file!\n");
     //create a new path  
     char newPath[PATH_MAX]; 
     fixPath(newPath,path); 
@@ -527,12 +796,6 @@ static int xmp_create(const char* path, mode_t mode, struct fuse_file_info* fi) 
 
 	    exit(EXIT_FAILURE);
 	}
-
-
-
-
-
-
     return 0;
 }
 
@@ -577,10 +840,10 @@ static int xmp_setxattr(const char *path, const char *name, const char *value,
 static int xmp_getxattr(const char *path, const char *name, char *value,
 			size_t size)
 {
-
-	//create a new path 
+        //create a new path 
 	char newPath[PATH_MAX]; 
 	fixPath(newPath,path); 
+
 
 	int res = lgetxattr(newPath, name, value, size);
 	if (res == -1)
