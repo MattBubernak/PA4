@@ -80,7 +80,7 @@ void fixPath(char newPath[PATH_MAX],const char * path)
 
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
-	
+
 	fprintf(stderr,"Entered getattr\n");
 
 	//create a new path 
@@ -90,7 +90,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 	fixPath(tmpPath,"/tmpreadfile.txt"); 
 	fprintf(stderr,"created this path:%s\n",tmpPath);
         fprintf(stderr,"real this path:%s\n",newPath);
-	
+
 
 
 
@@ -126,7 +126,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 		    if(errno == ENOATTR)
 		    {
 			fprintf(stdout, "No %s attribute set on %s inside of getattr\n", "user.pa4-encfs.encrypted", newPath);
-	
+
 			return EXIT_SUCCESS;
 		    }
 		    else 
@@ -155,7 +155,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 			exit(EXIT_FAILURE);
 		    }
 		}
-	
+
 		/* Print Value */
 		tmpval[valsize] = '\0';
 		fprintf(stdout, "%s = %s\n", "user.pa4-encfs.encrypted", tmpval);
@@ -177,7 +177,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 			    /* Perform do_crpt action (encrypt, decrypt, copy) */
 			    if(!do_crypt(file, tmpfile, action,key_str)){
 				fprintf(stderr, "do_crypt failure\n");
-				return -errno; 
+				//return -errno; 
 			    }
 
 			    /* Cleanup */
@@ -203,7 +203,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 			stbuf->st_blksize = stbuf2->st_blksize; 
 		}
 		remove(tmpPath); 
-		
+
 	}
 
 	return 0;
@@ -472,7 +472,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		    struct fuse_file_info *fi)
 {
         fprintf(stderr,"Entered read\n");
-	
+
 	//create a new path 
 	char newPath[PATH_MAX]; 
 	char tmpPath[PATH_MAX]; 
@@ -481,7 +481,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	fixPath(tmpPath,"/tmpreadfile.txt"); 
 	fprintf(stderr,"created this path:%s\n",tmpPath);
         fprintf(stderr,"real this path:%s\n",newPath);
-	
+
 	int fd;
 	int res;
 	(void) fi; //void fi to avoid warning
@@ -506,7 +506,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 
 
 		fd = open(newPath, O_RDONLY);
-				
+
 		if (fd == -1)
 			return -errno;
 
@@ -540,7 +540,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		free(tmpval);
 		//instead of exiting do the read operation 
 		fd = open(newPath, O_RDONLY);
-				
+
 		if (fd == -1)
 			return -errno;
 
@@ -563,7 +563,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		exit(EXIT_FAILURE);
 	    }
 	}
-	
+
 	/* Print Value */
 	tmpval[valsize] = '\0';
 	fprintf(stdout, "%s = %s\n", "user.pa4-encfs.encrypted", tmpval);
@@ -605,7 +605,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	{
 		fd = open(newPath, O_RDONLY);
 	}	
-	
+
 	else
 	{
 	//if it is encrypted, open the tmp file we created 
@@ -632,7 +632,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 	(void) fi; 
 
 	fprintf(stderr,"Entered write\n");
-	
+
 	//create a new path 
 	char newPath[PATH_MAX]; 
 	char tmpPath[PATH_MAX]; 
@@ -714,7 +714,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 		exit(EXIT_FAILURE);
 	    }
 	}
-	
+
 	/* Print Value */
 	tmpval[valsize] = '\0';
 	fprintf(stdout, "%s = %s\n", "user.pa4-encfs.encrypted", tmpval);
@@ -736,7 +736,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 		    /* Perform do_crpt action (encrypt, decrypt, copy) */
 		    if(!do_crypt(file, tmpfile, action,key_str)){
 			fprintf(stderr, "do_crypt failure\n");
-			return -errno; 
+			//return -errno; 
 		    }
 
 		    /* Cleanup */
@@ -756,7 +756,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 	{
 		fd = open(newPath, O_WRONLY);
 	}	
-	
+
 	else
 	{
 	//if it is encrypted, open the tmp file we created 
@@ -780,7 +780,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 	/* Perform do_crpt action (encrypt, decrypt, copy) */
 	    if(!do_crypt(tmpfile, file, action,key_str)){
 		fprintf(stderr, "do_crypt failure\n");
-		return -errno; 
+		//return -errno; 
 	    }
 
 	/* Cleanup */
