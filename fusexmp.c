@@ -92,7 +92,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
         fprintf(stderr,"real this path:%s\n",newPath);
 	
 
-	int fd;
+
 
 
 	int res;
@@ -125,7 +125,8 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 		if(valsize < 0){
 		    if(errno == ENOATTR)
 		    {
-			fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
+			fprintf(stdout, "No %s attribute set on %s inside of getattr\n", "user.pa4-encfs.encrypted", newPath);
+	
 			return EXIT_SUCCESS;
 		    }
 		    else 
@@ -144,7 +145,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 		valsize = getxattr(newPath,  "user.pa4-encfs.encrypted", tmpval, valsize);
 		if(valsize < 0){
 		    if(errno == ENOATTR){
-			fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
+			fprintf(stdout, "No %s attribute set on %s inside of getattr\n", "user.pa4-encfs.encrypted", newPath);
 			free(tmpval);
 			return EXIT_SUCCESS;
 		    }
@@ -628,8 +629,9 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 static int xmp_write(const char *path, const char *buf, size_t size,
 		     off_t offset, struct fuse_file_info *fi)
 {
+	(void) fi; 
 
-	 fprintf(stderr,"Entered write\n");
+	fprintf(stderr,"Entered write\n");
 	
 	//create a new path 
 	char newPath[PATH_MAX]; 
@@ -657,7 +659,21 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 	    if(errno == ENOATTR)
 	    {
 		fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
-		return EXIT_SUCCESS;
+
+	    	//perform the write 
+		fprintf(stderr, "getxattr failed, attempting to write the file...\n"); 
+		fd = open(newPath, O_WRONLY);
+		if (fd == -1)
+			return -errno;
+		//perform the write 
+		res = pwrite(fd, buf, size, offset);
+		if (res == -1)
+			res = -errno;
+		close(fd); 
+		fprintf(stderr, "I think I wrote the file... returning.\n"); 
+
+
+		return res;
 	    }
 	    else 
              {
@@ -677,7 +693,20 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 	    if(errno == ENOATTR){
 		fprintf(stdout, "No %s attribute set on %s\n", "user.pa4-encfs.encrypted", newPath);
 		free(tmpval);
-		return EXIT_SUCCESS;
+
+		fprintf(stderr, "getxattr failed, attempting to write the file...\n"); 
+		//perform the write 
+		fd = open(newPath, O_WRONLY);
+
+		if (fd == -1)
+			return -errno;
+		//perform the write 
+		res = pwrite(fd, buf, size, offset);
+		if (res == -1)
+			res = -errno;
+		close(fd); 
+		fprintf(stderr, "I think I wrote the file... returning.\n"); 
+		return res;
 	    }
 	    else{
 		perror("getxattr error");
@@ -786,6 +815,7 @@ static int xmp_statfs(const char *path, struct statvfs *stbuf)
 
 static int xmp_create(const char* path, mode_t mode, struct fuse_file_info* fi) {
 
+(void) mode; 
     fprintf(stderr,"created a file!\n");
     //create a new path  
     char newPath[PATH_MAX]; 
@@ -874,14 +904,16 @@ static int xmp_setxattr(const char *path, const char *name, const char *value,
 static int xmp_getxattr(const char *path, const char *name, char *value,
 			size_t size)
 {
+	fprintf(stderr, "entered xmp_getxattr\n"); 
         //create a new path 
 	char newPath[PATH_MAX]; 
 	fixPath(newPath,path); 
 
-
+	fprintf(stderr, "called lgetxaattr with path: %s\n", newPath); 
 	int res = lgetxattr(newPath, name, value, size);
 	if (res == -1)
 		return -errno;
+	fprintf(stderr, "exiting xmp_getxattr without error\n"); 
 	return res;
 }
 
